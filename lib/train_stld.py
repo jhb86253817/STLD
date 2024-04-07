@@ -22,6 +22,8 @@ import torchvision.models as models
 from networks import *
 import data_utils
 from functions import * 
+from hrnetv2_config import _C   
+from hrnetv2 import HighResolutionNet
 
 cudnn.deterministic = True
 np.random.seed(1234)
@@ -66,6 +68,7 @@ print('###########################################')
 print('experiment_name:', cfg.experiment_name)
 print('data_name:', cfg.data_name)
 print('labeled_num:', cfg.labeled_num)
+print('os_num:', cfg.os_num)
 print('semi_iter:', cfg.semi_iter)
 print('det_head:', cfg.det_head)
 print('net_stride:', cfg.net_stride)
@@ -98,11 +101,41 @@ logging.info('gpu_id: {}'.format(cfg.gpu_id))
 logging.info('###########################################')
 
 if cfg.det_head == 'map':
-    resnet18 = models.resnet18(pretrained=True)
-    net = Map_resnet(resnet18, cfg)
+    if cfg.backbone == 'resnet18':
+        resnet18 = models.resnet18(pretrained=True)
+        net = Map_resnet(resnet18, cfg)
+    elif cfg.backbone == 'resnet50':
+        resnet50 = models.resnet50(pretrained=True)
+        net = Map_resnet(resnet50, cfg)
+    elif cfg.backbone == 'resnet101':
+        resnet101 = models.resnet101(pretrained=True)
+        net = Map_resnet(resnet101, cfg)
+    elif cfg.backbone == 'hrnet':
+        _C.MODEL.NUM_JOINTS = cfg.num_lms
+        hrnet = HighResolutionNet(_C)
+        hrnet.init_weights('./models/pytorch/imagenet/hrnetv2_w18_imagenet_pretrained.pth')
+        net = Map_hrnet(hrnet, cfg)
+    else:
+        print('No such backbone!')
+        exit(0)
 elif cfg.det_head == 'tf':
-    resnet18 = models.resnet18(pretrained=True)
-    net = TF_resnet(resnet18, cfg)
+    if cfg.backbone == 'resnet18':
+        resnet18 = models.resnet18(pretrained=True)
+        net = TF_resnet(resnet18, cfg)
+    elif cfg.backbone == 'resnet50':
+        resnet50 = models.resnet50(pretrained=True)
+        net = TF_resnet(resnet50, cfg)
+    elif cfg.backbone == 'resnet101':
+        resnet101 = models.resnet101(pretrained=True)
+        net = TF_resnet(resnet101, cfg)
+    elif cfg.backbone == 'hrnet':
+        _C.MODEL.NUM_JOINTS = cfg.num_lms
+        hrnet = HighResolutionNet(_C)
+        hrnet.init_weights('./models/pytorch/imagenet/hrnetv2_w18_imagenet_pretrained.pth')
+        net = TF_hrnet(hrnet, cfg)
+    else:
+        print('No such backbone!')
+        exit(0)
 else:
     print('No such head:', cfg.det_head)
     exit(0)
@@ -143,9 +176,9 @@ labels_train_u = get_label(cfg.data_name, file_name_u)
 labels_val = get_label(cfg.data_name, 'test.txt', 'gt')
 
 labels_train_l_origin = copy.deepcopy(labels_train_l)
-# if labeled number less than 100, oversample it to 100 for better performance
-sample_num = 100
-sample_thresh = 100
+# if labeled number less than os_num, oversample it to os_num for better performance
+sample_num = cfg.os_num
+sample_thresh = cfg.os_num
 if len(labels_train_l) < sample_thresh:
     sample_times = ceil(1. * sample_num / len(labels_train_l))
     labels_train_l = labels_train_l * sample_times
@@ -188,8 +221,8 @@ else:
     print('No such head:', cfg.det_head)
     exit(0)
 
-loader_train_u = torch.utils.data.DataLoader(data_train_u, batch_size=cfg.batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=False)
-loader_val = torch.utils.data.DataLoader(data_val, batch_size=cfg.batch_size, shuffle=False, num_workers=8, pin_memory=True, drop_last=False)
+loader_train_u = torch.utils.data.DataLoader(data_train_u, batch_size=cfg.batch_size, shuffle=False, num_workers=16, pin_memory=True, drop_last=False)
+loader_val = torch.utils.data.DataLoader(data_val, batch_size=cfg.batch_size, shuffle=False, num_workers=16, pin_memory=True, drop_last=False)
 
 ###############
 # the norm for test
@@ -212,11 +245,41 @@ for ti in range(cfg.semi_iter):
     logging.info('Starting iter {}'.format(ti))
 
     if cfg.det_head == 'map':
-        resnet18 = models.resnet18(pretrained=True)
-        net = Map_resnet(resnet18, cfg)
+        if cfg.backbone == 'resnet18':
+            resnet18 = models.resnet18(pretrained=True)
+            net = Map_resnet(resnet18, cfg)
+        elif cfg.backbone == 'resnet50':
+            resnet50 = models.resnet50(pretrained=True)
+            net = Map_resnet(resnet50, cfg)
+        elif cfg.backbone == 'resnet101':
+            resnet101 = models.resnet101(pretrained=True)
+            net = Map_resnet(resnet101, cfg)
+        elif cfg.backbone == 'hrnet':
+            _C.MODEL.NUM_JOINTS = cfg.num_lms
+            hrnet = HighResolutionNet(_C)
+            hrnet.init_weights('./models/pytorch/imagenet/hrnetv2_w18_imagenet_pretrained.pth')
+            net = Map_hrnet(hrnet, cfg)
+        else:
+            print('No such backbone!')
+            exit(0)
     elif cfg.det_head == 'tf':
-        resnet18 = models.resnet18(pretrained=True)
-        net = TF_resnet(resnet18, cfg)
+        if cfg.backbone == 'resnet18':
+            resnet18 = models.resnet18(pretrained=True)
+            net = TF_resnet(resnet18, cfg)
+        elif cfg.backbone == 'resnet50':
+            resnet50 = models.resnet50(pretrained=True)
+            net = TF_resnet(resnet50, cfg)
+        elif cfg.backbone == 'resnet101':
+            resnet101 = models.resnet101(pretrained=True)
+            net = TF_resnet(resnet101, cfg)
+        elif cfg.backbone == 'hrnet':
+            _C.MODEL.NUM_JOINTS = cfg.num_lms
+            hrnet = HighResolutionNet(_C)
+            hrnet.init_weights('./models/pytorch/imagenet/hrnetv2_w18_imagenet_pretrained.pth')
+            net = TF_hrnet(hrnet, cfg)
+        else:
+            print('No such backbone!')
+            exit(0)
     else:
         print('No such head:', cfg.det_head)
         exit(0)
@@ -251,7 +314,7 @@ for ti in range(cfg.semi_iter):
             print('No such head:', cfg.det_head)
             exit(0)
 
-        loader_train_pp = torch.utils.data.DataLoader(data_train_pp, batch_size=cfg.batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=False)
+        loader_train_pp = torch.utils.data.DataLoader(data_train_pp, batch_size=cfg.batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
         optimizer = optim.Adam(net.parameters(), lr=cfg.init_lr)
         if ti <= 1:
             scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg.decay_steps, gamma=0.1)
@@ -268,6 +331,9 @@ for ti in range(cfg.semi_iter):
     if ti <= 1:
         # no shrink regression
         labels_train = labels_train_l  
+    elif ti <= 3:
+        # with shrink regression
+        labels_train = labels_train_l + pseudo_labels_sl
     else:
         # with shrink regression
         labels_train = labels_train_l_origin + pseudo_labels_sl
@@ -296,7 +362,7 @@ for ti in range(cfg.semi_iter):
     else:
         print('No such head:', cfg.det_head)
         exit(0)
-    loader_train = torch.utils.data.DataLoader(data_train, batch_size=cfg.batch_size, shuffle=True, num_workers=8, pin_memory=True, drop_last=False)
+    loader_train = torch.utils.data.DataLoader(data_train, batch_size=cfg.batch_size, shuffle=True, num_workers=16, pin_memory=True, drop_last=False)
 
     optimizer = optim.Adam(net.parameters(), lr=cfg.init_lr)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=cfg.decay_steps, gamma=0.1)
@@ -308,9 +374,9 @@ for ti in range(cfg.semi_iter):
     # test
     print('After iter {}'.format(ti))
     logging.info('After iter {}'.format(ti))
-    nme = val_model(cfg, net, loader_val, norm_indices, device)
-    print('nme: {}'.format(nme))
-    logging.info('nme: {}'.format(nme))
+    nme_mean, fr, auc = val_model(cfg, net, loader_val, norm_indices, device)
+    print('nme: {}, fr: {}, auc: {}'.format(nme_mean, fr, auc))
+    logging.info('nme: {}, fr: {}, auc: {}'.format(nme_mean, fr, auc))
     
     ###############
     # estimate pseudo labels

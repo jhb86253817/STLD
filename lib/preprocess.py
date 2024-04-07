@@ -126,7 +126,6 @@ def gen_data(root_folder, data_name, target_size, labeled_num_list):
     if data_name == 'data_300W':
         # train for data_300W
         folders_train = ['afw', 'helen/trainset', 'lfpw/trainset']
-        annos_train = {}
         for folder_train in folders_train:
             all_files = sorted(os.listdir(os.path.join(root_folder, data_name, folder_train)))
             image_files = [x for x in all_files if '.pts' not in x]
@@ -137,33 +136,9 @@ def gen_data(root_folder, data_name, target_size, labeled_num_list):
                 image_crop, anno = process_300w(os.path.join(root_folder, 'data_300W'), folder_train, image_name, label_name, target_size, 1.1)
                 image_crop_name = folder_train.replace('/', '_')+'_'+image_name
                 cv2.imwrite(os.path.join(root_folder, data_name, 'images_train', image_crop_name), image_crop)
-                annos_train[image_crop_name] = anno
-        
-        annos_train = list(annos_train.items())
-        random.shuffle(annos_train)
-
-        for labeled_num in labeled_num_list:
-            assert labeled_num > 0 and labeled_num < len(annos_train)
-            labeled_num_str = str(labeled_num)
-            file_name_l = 'train_semi_l_'+'0'*(5-len(labeled_num_str))+labeled_num_str+'.txt'
-            file_name_u = 'train_semi_u_'+'0'*(5-len(labeled_num_str))+labeled_num_str+'.txt'
-
-            # labeled
-            with open(os.path.join(root_folder, data_name, file_name_l), 'w') as f:
-                for image_crop_name, anno in annos_train[:labeled_num]:
-                    f.write(image_crop_name+' ')
-                    for x,y in anno:
-                        f.write(str(x)+' '+str(y)+' ')
-                    f.write('\n')
-
-            # unlabeled
-            with open(os.path.join(root_folder, data_name, file_name_u), 'w') as f:
-                for image_crop_name, anno in annos_train[labeled_num:]:
-                    f.write(image_crop_name+'\n')
 
         # test for data_300W
         folders_test = ['helen/testset', 'lfpw/testset', 'ibug']
-        annos_test = {}
         for folder_test in folders_test:
             all_files = sorted(os.listdir(os.path.join(root_folder, data_name, folder_test)))
             image_files = [x for x in all_files if '.pts' not in x]
@@ -174,17 +149,6 @@ def gen_data(root_folder, data_name, target_size, labeled_num_list):
                 image_crop, anno = process_300w(os.path.join(root_folder, data_name), folder_test, image_name, label_name, target_size, 1.1)
                 image_crop_name = folder_test.replace('/', '_')+'_'+image_name
                 cv2.imwrite(os.path.join(root_folder, data_name, 'images_test', image_crop_name), image_crop)
-                annos_test[image_crop_name] = anno
-        with open(os.path.join(root_folder, data_name, 'test.txt'), 'w') as f:
-            for image_crop_name, anno in annos_test.items():
-                f.write(image_crop_name+' ')
-                for x,y in anno:
-                    f.write(str(x)+' '+str(y)+' ')
-                f.write('\n')
-
-        annos = None
-        with open(os.path.join(root_folder, data_name, 'test.txt'), 'r') as f:
-            annos = f.readlines()
     ############################################################################################
     elif data_name == 'WFLW':
         # WFLW train
@@ -192,7 +156,6 @@ def gen_data(root_folder, data_name, target_size, labeled_num_list):
         with open(os.path.join(root_folder, data_name, 'WFLW_annotations', 'list_98pt_rect_attr_train_test', train_file), 'r') as f:
             annos_train = f.readlines()
         annos_train = [x.strip().split() for x in annos_train]
-        annos_train_dict = {}
         count = 1
         for anno_train in annos_train:
             image_crop, anno = process_wflw(anno_train, target_size)
@@ -200,51 +163,21 @@ def gen_data(root_folder, data_name, target_size, labeled_num_list):
             image_crop_name = 'wflw_train_' + '0' * pad_num + str(count) + '.jpg'
             print(image_crop_name)
             cv2.imwrite(os.path.join(root_folder, data_name, 'images_train', image_crop_name), image_crop)
-            annos_train_dict[image_crop_name] = anno
             count += 1
-
-        annos_train_dict = list(annos_train_dict.items())
-        random.shuffle(annos_train_dict)
-
-        for labeled_num in labeled_num_list:
-            assert labeled_num > 0 and labeled_num < len(annos_train_dict)
-            labeled_num_str = str(labeled_num)
-            file_name_l = 'train_semi_l_'+'0'*(5-len(labeled_num_str))+labeled_num_str+'.txt'
-            file_name_u = 'train_semi_u_'+'0'*(5-len(labeled_num_str))+labeled_num_str+'.txt'
-
-            # labeled
-            with open(os.path.join(root_folder, data_name, file_name_l), 'w') as f:
-                for image_crop_name, anno in annos_train_dict[:labeled_num]:
-                    f.write(image_crop_name+' ')
-                    for x,y in anno:
-                        f.write(str(x)+' '+str(y)+' ')
-                    f.write('\n')
-
-            # unlabeled
-            with open(os.path.join(root_folder, data_name, file_name_u), 'w') as f:
-                for image_crop_name, anno in annos_train_dict[labeled_num:]:
-                    f.write(image_crop_name+'\n')
 
         # WFLW test
         test_file = 'list_98pt_rect_attr_test.txt'
         with open(os.path.join(root_folder, data_name, 'WFLW_annotations', 'list_98pt_rect_attr_train_test', test_file), 'r') as f:
             annos_test = f.readlines()
         annos_test = [x.strip().split() for x in annos_test]
-        names_mapping = {}
         count = 1
-        with open(os.path.join(root_folder, data_name, 'test.txt'), 'w') as f:
-            for anno_test in annos_test:
-                image_crop, anno = process_wflw(anno_test, target_size)
-                pad_num = 4-len(str(count))
-                image_crop_name = 'wflw_test_' + '0' * pad_num + str(count) + '.jpg'
-                print(image_crop_name)
-                names_mapping[anno_test[0]+'_'+anno_test[-1]] = [image_crop_name, anno]
-                cv2.imwrite(os.path.join(root_folder, data_name, 'images_test', image_crop_name), image_crop)
-                f.write(image_crop_name+' ')
-                for x,y in list(anno):
-                    f.write(str(x)+' '+str(y)+' ')
-                f.write('\n')
-                count += 1
+        for anno_test in annos_test:
+            image_crop, anno = process_wflw(anno_test, target_size)
+            pad_num = 4-len(str(count))
+            image_crop_name = 'wflw_test_' + '0' * pad_num + str(count) + '.jpg'
+            print(image_crop_name)
+            cv2.imwrite(os.path.join(root_folder, data_name, 'images_test', image_crop_name), image_crop)
+            count += 1
     ############################################################################################
     elif data_name == 'AFLW':
         mat = hdf5storage.loadmat('../data/AFLW/AFLWinfo_release.mat')
@@ -256,7 +189,6 @@ def gen_data(root_folder, data_name, target_size, labeled_num_list):
         train_indices = ra[:20000]
         test_indices = ra[20000:]
 
-        annos_train_dict = {}
         for index in train_indices:
             # from matlab index
             image_name = nameList[index-1][0][0]
@@ -267,46 +199,19 @@ def gen_data(root_folder, data_name, target_size, labeled_num_list):
             image_crop_name = 'aflw_train_' + '0' * pad_num + str(index) + '.jpg'
             print(image_crop_name)
             cv2.imwrite(os.path.join(root_folder, data_name, 'images_train', image_crop_name), image_crop)
-            annos_train_dict[image_crop_name] = anno
 
-        annos_train_dict = list(annos_train_dict.items())
-        random.shuffle(annos_train_dict)
-
-        for labeled_num in labeled_num_list:
-            assert labeled_num > 0 and labeled_num < len(annos_train_dict)
-            labeled_num_str = str(labeled_num)
-            file_name_l = 'train_semi_l_'+'0'*(5-len(labeled_num_str))+labeled_num_str+'.txt'
-            file_name_u = 'train_semi_u_'+'0'*(5-len(labeled_num_str))+labeled_num_str+'.txt'
-
-            # labeled
-            with open(os.path.join(root_folder, data_name, file_name_l), 'w') as f:
-                for image_crop_name, anno in annos_train_dict[:labeled_num]:
-                    f.write(image_crop_name+' ')
-                    for x,y in anno:
-                        f.write(str(x)+' '+str(y)+' ')
-                    f.write('\n')
-
-            # unlabeled
-            with open(os.path.join(root_folder, data_name, file_name_u), 'w') as f:
-                for image_crop_name, anno in annos_train_dict[labeled_num:]:
-                    f.write(image_crop_name+'\n')
 
         # test for AFLW
-        with open(os.path.join(root_folder, data_name, 'test.txt'), 'w') as f:
-            for index in test_indices:
-                # from matlab index
-                image_name = nameList[index-1][0][0]
-                bbox = bboxes[index-1]
-                anno = annos[index-1]
-                image_crop, anno = process_aflw(root_folder, image_name, bbox, anno, target_size)
-                pad_num = 5-len(str(index))
-                image_crop_name = 'aflw_test_' + '0' * pad_num + str(index) + '.jpg'
-                print(image_crop_name)
-                cv2.imwrite(os.path.join(root_folder, data_name, 'images_test', image_crop_name), image_crop)
-                f.write(image_crop_name+' ')
-                for x,y in anno:
-                    f.write(str(x)+' '+str(y)+' ')
-                f.write('\n')
+        for index in test_indices:
+            # from matlab index
+            image_name = nameList[index-1][0][0]
+            bbox = bboxes[index-1]
+            anno = annos[index-1]
+            image_crop, anno = process_aflw(root_folder, image_name, bbox, anno, target_size)
+            pad_num = 5-len(str(index))
+            image_crop_name = 'aflw_test_' + '0' * pad_num + str(index) + '.jpg'
+            print(image_crop_name)
+            cv2.imwrite(os.path.join(root_folder, data_name, 'images_test', image_crop_name), image_crop)
     else:
         print('Wrong data!')
 

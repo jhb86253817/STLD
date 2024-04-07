@@ -13,6 +13,7 @@ from math import floor
 from scipy.io import loadmat, savemat
 from collections import OrderedDict
 import json
+from scipy.integrate import simps
 
 cudnn.deterministic = True
 np.random.seed(1234)
@@ -61,7 +62,7 @@ def compute_loss_map(outputs_map, outputs_map2, labels_map, labels_map2, masks_m
         loss_map2 /= masks_map2.sum()
 
     return loss_map, loss_map2
- 
+
 def train_model(cfg, num_epochs, net, loader_train, loader_val, criterion_cls, criterion_reg, optimizer, scheduler, save_path, norm_indices, cur_iter, device):
     for epoch in range(num_epochs):
         net.train()
@@ -114,8 +115,7 @@ def train_model(cfg, num_epochs, net, loader_train, loader_val, criterion_cls, c
     return net
 
 def val_model(cfg, net, loader_val, norm_indices, device):
-    nme_sum = 0
-    count_sum = 0
+    nme_list = []
     for i, data in enumerate(loader_val):
         if cfg.det_head == 'map':
             inputs, labels = data
@@ -129,22 +129,21 @@ def val_model(cfg, net, loader_val, norm_indices, device):
 
             labels = labels.view(tmp_batch, tmp_channel, 2)
 
-            nme, count = compute_nme(outputs, labels, norm_indices)
-            nme_sum += nme.item()
-            count_sum += count
+            nmes = compute_nme(outputs, labels, norm_indices)
+            nme_list.extend(nmes)
         elif cfg.det_head == 'tf':
             inputs, labels = data
             inputs = inputs.to(device)
             labels = labels.to(device)
             outputs, _, _, _ = forward_tf(net, inputs)
-            nme, count = compute_nme(outputs, labels, norm_indices)
-            nme_sum += nme.item()
-            count_sum += count
+            nmes = compute_nme(outputs, labels, norm_indices)
+            nme_list.extend(nmes)
         else:
             print('No such head:', cfg.det_head)
             exit(0)
-    nme_avg = nme_sum / count_sum
-    return nme_avg
+    nme_mean = np.mean(nme_list)
+    fr, auc = compute_fr_and_auc(nme_list)
+    return nme_mean, fr, auc
     
 def forward_map(net, inputs, input_size, net_stride):
     net.eval()
@@ -195,8 +194,16 @@ def compute_nme(lms_pred, lms_gt, norm_indices):
         norm = torch.norm(lms_gt[:,norm_indices[0],:] - lms_gt[:,norm_indices[1],:], dim=1)
     else:
         norm = 1
-    nme = torch.sum(torch.mean(torch.norm(lms_pred - lms_gt, dim=2), dim=1) / norm)
-    return nme, lms_pred.size(0)
+    nmes = (torch.mean(torch.norm(lms_pred - lms_gt, dim=2), dim=1) / norm).cpu().numpy().tolist()
+    return nmes 
+
+def compute_fr_and_auc(nmes, thres=0.1, step=0.0001):
+    num_data = len(nmes)
+    xs = np.arange(0, thres + step, step)
+    ys = np.array([np.count_nonzero(nmes <= x) for x in xs]) / float(num_data)
+    fr = 1.0 - ys[-1]
+    auc = simps(ys, x=xs) / thres
+    return fr, auc
 
 def gen_pseudo(cfg, net, loader_train_u, data_type, cur_iter, device):
     img_names_list = []
@@ -219,6 +226,17 @@ def gen_pseudo(cfg, net, loader_train_u, data_type, cur_iter, device):
                 inputs, img_names = data
                 inputs = inputs.to(device)
                 outputs, _, _, _ = forward_tf(net, inputs)
+                img_names_list += img_names
+                outputs_list.append(outputs)
+            elif cfg.det_head == 'pip':
+                inputs, img_names = data
+                inputs = inputs.to(device)
+
+                tmp_x, tmp_y, outputs_cls, max_cls = forward_pip(net, inputs, cfg.input_size, cfg.net_stride)
+                tmp_batch, tmp_channel, tmp_height, tmp_width = outputs_cls.size()
+                tmp_x = tmp_x.view(tmp_batch, tmp_channel, 1)
+                tmp_y = tmp_y.view(tmp_batch, tmp_channel, 1)
+                outputs = torch.cat((tmp_x, tmp_y), 2)
                 img_names_list += img_names
                 outputs_list.append(outputs)
             else:
